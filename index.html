@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ur" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shman Play Web</title>
+    <style>
+        *{box-sizing:border-box}
+        body{margin:0;background:#10131d;color:#f5f7fb;font:15px Arial;padding-bottom:80px;padding-top:60px}
+        header{background:#191e2b;padding:13px;display:flex;justify-content:space-around;align-items:center;position:fixed;top:0;left:0;right:0;z-index:100;border-bottom:1px solid #30394b;}
+        nav{background:#191e2b;padding:10px;display:flex;justify-content:space-around;align-items:center;position:fixed;bottom:0;left:0;right:0;z-index:100;border-top:1px solid #30394b;}
+        main{max-width:720px;margin:auto;padding:14px}
+        .card{background:#191e2b;border:1px solid #30394b;border-radius:15px;padding:14px;margin:12px 0}
+        button{background:#ff365d;color:white;border:0;border-radius:10px;padding:11px;margin:4px;cursor:pointer}
+        button.secondary{background:#30394b}
+        input,textarea,select{width:100%;padding:12px;margin:7px 0;border-radius:9px;border:1px solid #394257;background:#111725;color:white}
+        .hidden{display:none!important}
+        .muted{color:#aab3c4;font-size:13px}
+        .video{width:100%;max-height:65vh;background:#000;border-radius:10px}
+        .actions{display:flex;flex-wrap:wrap}
+        .liked{background:#8d2440}
+        .auth{max-width:420px;margin:4vh auto;position:relative;z-index:10;}
+        nav button{background:transparent;color:white;font-size:12px;border:none;}
+        nav button.active{color:#ff8299;font-weight:bold;}
+        .avatar{width:55px;height:55px;border-radius:50%;object-fit:cover}
+        .video-thumbnail-box{cursor:pointer;background:#000;border-radius:10px;padding:20px;text-align:center;margin-bottom:10px;border:1px dashed #394257;}
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <span>▶ SHMAN PLAY WEB</span>
+        <span id="headUser">Login</span>
+    </header>
+
+    <!-- Auth Section (Login / Register) -->
+    <main id="auth" class="auth card">
+        <h2 id="authTitle">Login</h2>
+        <input type="text" id="name" class="hidden" placeholder="نام (Name)">
+        <input type="email" id="email" placeholder="ای میل (Email)">
+        <input type="password" id="pass" placeholder="پاس ورڈ (Password)">
+        <button id="authGo">Login</button>
+        <button id="toggle" class="secondary">Create account / Login</button>
+        <button id="forgot" class="secondary">Forgot password</button>
+        <p id="authMsg" class="muted"></p>
+    </main>
+
+    <!-- Main App Section -->
+    <main id="app" class="hidden">
+        
+        <!-- Home Feed Section -->
+        <section id="home">
+            <h3>تازہ ویڈیوز</h3>
+            <input type="text" id="search" placeholder="تلاش کریں...">
+            <div id="feed"></div>
+        </section>
+
+        <!-- Videos Section -->
+        <section id="videos" class="hidden">
+            <h3>Videos</h3>
+            <div id="videoFeed"></div>
+        </section>
+
+        <!-- Upload Section -->
+        <section id="upload" class="hidden">
+            <h3>Upload video / short</h3>
+            <select id="type">
+                <option value="video">Normal video</option>
+                <option value="short">Short</option>
+            </select>
+            <input type="file" id="file" accept="video/*">
+            <input type="text" id="title" placeholder="عنوان (Title)">
+            <textarea id="desc" placeholder="تفصیل (Description)"></textarea>
+            <progress id="progress" value="0" max="100" style="width:100%"></progress>
+            <button id="uploadBtn">Upload now</button>
+            <p id="upMsg" class="muted"></p>
+        </section>
+
+        <!-- Shorts Section -->
+        <section id="shorts" class="hidden">
+            <h3>Shorts</h3>
+            <div id="shortFeed"></div>
+        </section>
+
+        <!-- Profile Section -->
+        <section id="profile" class="hidden">
+            <div class="card">
+                <img id="avatar" class="avatar" src="" alt="Avatar">
+                <h3 id="myName"></h3>
+                <p id="myEmail" class="muted"></p>
+                <p id="uid" class="muted"></p>
+                <input type="text" id="newName" placeholder="نیا نام">
+                <input type="file" id="photo" accept="image/*">
+                <button id="saveProfile">Save profile</button>
+                <button id="logout" class="secondary">Logout</button>
+                <p id="profileMsg" class="muted"></p>
+            </div>
+            <h3>My uploads</h3>
+            <div id="mine"></div>
+        </section>
+
+        <!-- Public Profile Section -->
+        <section id="publicProfile" class="hidden">
+            <button id="back" class="secondary">Back</button>
+            <div id="publicInfo"></div>
+            <div id="publicVideos"></div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Navigation (Fixed at bottom) -->
+    <nav>
+        <button data-page="home" class="active">⌂ Home</button>
+        <button data-page="videos">▶ Videos</button>
+        <button data-page="upload">＋ Upload</button>
+        <button data-page="shorts">▣ Shorts</button>
+        <button data-page="profile">♙ Profile</button>
+    </nav>
+
+    <!-- Toast Notification -->
+    <div id="toast" style="display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:5px;z-index:999"></div>
+
+    <!-- Firebase Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, doc, getDoc, getDocs, addDoc, setDoc, deleteDoc, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCt2_bT3MWxzhSuDaPrX-ajornMjG6wbauH",
+            authDomain: "shman-play.firebaseapp.com",
+            projectId: "shman-play",
+            storageBucket: "shman-play.firebasestorage.app",
+            messagingSenderId: "507627348946",
+            appId: "1:507627348946:web:c8b69476289a1a3d189e0b",
+            measurementId: "G-MDMXPN97PE"
+        };
+
+        const app = initializeApp(firebaseConfig),
+              auth = getAuth(app),
+              db = getFirestore(app),
+              storage = getStorage(app),
+              $ = id => document.getElementById(id);
+
+        let user = null, register = false, videos = [];
+
+        function toast(t) {
+            $("toast").textContent = t;
+            $("toast").style.display = "block";
+            setTimeout(() => $("toast").style.display = "none", 3000);
+        }
+
+        function errorText(e) {
+            return e.code === "auth/email-already-in-use" ? "Email پہلے سے رجسٹر ہے" :
+                   e.code === "auth/invalid-credential" ? "Email یا password غلط ہے" : e.message;
+        }
+
+        $("toggle").onclick = () => {
+            register = !register;
+            $("name").classList.toggle("hidden", !register);
+            $("authTitle").textContent = register ? "Register" : "Login";
+            $("authGo").textContent = register ? "Create account" : "Login";
+        };
+
+        $("authGo").onclick = async () => {
+            try {
+                let email = $("email").value.trim(), password = $("pass").value;
+                if (register) {
+                    let name = $("name").value.trim();
+                    if (!name) throw Error("نام لکھیں");
+                    let c = await createUserWithEmailAndPassword(auth, email, password);
+                    await updateProfile(c.user, { displayName: name });
+                    await setDoc(doc(db, "users", c.user.uid), { uid: c.user.uid, name, email, photoURL: "" });
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                }
+            } catch (e) {
+                $("authMsg").textContent = errorText(e);
+            }
+        };
+
+        $("forgot").onclick = async () => {
+            try {
+                await sendPasswordResetEmail(auth, $("email").value.trim());
+                $("authMsg").textContent = "Reset email بھیج دی گئی";
+            } catch (e) {
+                $("authMsg").textContent = errorText(e);
+            }
+        };
+
+        onAuthStateChanged(auth, async u => {
+            user = u;
+            $("auth").classList.toggle("hidden", !!u);
+            $("app").classList.toggle("hidden", !u);
+            if (u) {
+                $("headUser").textContent = u.displayName || u.email;
+                await profile();
+                await load();
+            }
+        });
+
+        $("logout").onclick = () => signOut(auth);
+
+        document.querySelectorAll("nav button").forEach(b => b.onclick = () => page(b.dataset.page));
+
+        function page(id) {
+            document.querySelectorAll("main section").forEach(s => s.classList.add("hidden"));
+            $(id).classList.remove("hidden");
+            document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.page === id));
+        }
+
+        async function profile() {
+            let s = await getDoc(doc(db, "users", user.uid)), d = s.exists() ? s.data() : {};
+            $("myName").textContent = d.name || user.displayName || "User";
+            $("myEmail").textContent = user.email;
+            $("uid").textContent = "User ID: " + user.uid;
+            $("newName").value = d.name || user.displayName || "";
+            $("avatar").src = d.photoURL || "https://www.gravatar.com/avatar/?d=mp";
+        }
+
+        $("saveProfile").onclick = async () => {
+            try {
+                let name = $("newName").value.trim();
+                if (!name) throw Error("نام درج کریں");
+                let photoURL = $("avatar").src, f = $("photo").files[0];
+                if (f) {
+                    if (!f.type.startsWith("image/") || f.size > 5 * 1024 * 1024) throw Error("تصویر 5MB سے کم ہو");
+                    let t = uploadBytesResumable(ref(storage, `profiles/${user.uid}/avatar`), f);
+                    await new Promise((a, b) => t.on("state_changed", null, b, a));
+                    photoURL = await getDownloadURL(t.snapshot.ref);
+                }
+                await updateProfile(user, { displayName: name, photoURL });
+                await setDoc(doc(db, "users", user.uid), { uid: user.uid, name, email: user.email, photoURL }, { merge: true });
+                await profile();
+                toast("Profile محفوظ ہوگئی");
+            } catch (e) {
+                $("profileMsg").textContent = errorText(e);
+            }
+        };
+
+        $("uploadBtn").onclick = async () => {
+            try {
+                let f = $("file").files[0], title = $("title").value.trim();
+                if (!f || !title) throw Error("عنوان اور ویڈیو منتخب کریں");
+                if (!f.type.startsWith("video/") || f.size > 200 * 1024 * 1024) throw Error("درست ویڈیو منتخب کریں، زیادہ سے زیادہ 200MB");
+                $("uploadBtn").disabled = true;
+                let path = `videos/${user.uid}/${Date.now()}_${f.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`,
+                    t = uploadBytesResumable(ref(storage, path), f);
+                await new Promise((a, b) => t.on("state_changed", s => $("progress").value = 100 * s.bytesTransferred / s.totalBytes, b, a));
+                let url = await getDownloadURL(t.snapshot.ref);
+                await addDoc(collection(db, "videos"), {
+                    uid: user.uid,
+                    title,
+                    description: $("desc").value,
+                    type: $("type").value,
+                    url,
+                    filePath: path,
+                    userName: user.displayName || "User",
+                    createdAt: serverTimestamp()
+                });
+                $("upMsg").textContent = "Upload مکمل ہوگیا";
+                $("file").value = "";
+                $("title").value = "";
+                $("desc").value = "";
+                await load();
+            } catch (e) {
+                $("upMsg").textContent = errorText(e);
+            } finally {
+                $("uploadBtn").disabled = false;
+            }
+        };
+
+        async function load() {
+            try {
+                let s = await getDocs(query(collection(db, "videos"), orderBy("createdAt", "desc"), limit(100)));
+                videos = s.docs.map(d => ({ id: d.id, ...d.data() }));
+                render();
+            } catch (e) {
+                toast("Videos load نہیں ہوئیں: " + e.message);
+            }
+        }
+
+        function card(v) {
+            let c = document.createElement("article");
+            c.className = "card";
+            
+            let owner = document.createElement("button");
+            owner.className = "secondary";
+            owner.textContent = v.userName || "User";
+            owner.onclick = () => openProfile(v.uid);
+
+            let h = document.createElement("h3");
+            h.textContent = v.title;
+
+            let thumbBox = document.createElement("div");
+            thumbBox.className = "video-thumbnail-box";
+            thumbBox.innerHTML = "▶ ویڈیو دیکھنے کے لیے یہاں کلک کریں";
+
+            let el = document.createElement("video");
+            el.className = "video hidden";
+            el.controls = true;
+            el.playsInline = true;
+            el.preload = "metadata";
+            el.src = v.url;
+
+            thumbBox.onclick = () => {
+                thumbBox.classList.add("hidden");
+                el.classList.remove("hidden");
+                el.play();
+            };
+
+            let d = document.createElement("p");
+            d.className = "muted";
+            d.textContent = v.description || "";
+
+            let a = document.createElement("div");
+            a.className = "actions";
+            
+            let like = document.createElement("button");
+            like.textContent = "♡ Like";
+            checkLike(v.id, like);
+            like.onclick = () => toggleLike(v.id, like);
+            
+            let cm = document.createElement("button");
+            cm.textContent = "💬 Comment";
+            cm.onclick = () => comments(v.id, c);
+            
+            let sh = document.createElement("button");
+            sh.textContent = "↗ Share";
+            sh.onclick = async () => {
+                let link = location.href.split("#")[0] + "#video=" + v.id;
+                try {
+                    if (navigator.share) await navigator.share({ title: v.title, url: link });
+                    else {
+                        await navigator.clipboard.writeText(link);
+                        toast("لنک کاپی ہوگیا");
+                    }
+                } catch {}
+            };
+
+            a.append(like, cm, sh);
+            c.append(owner, h, thumbBox, el, d, a);
+            return c;
+        }
+
+        async function checkLike(id, b) {
+            try {
+                if ((await getDoc(doc(db, "videos", id, "likes", user.uid))).exists()) {
+                    b.textContent = "♥ Liked";
+                    b.classList.add("liked");
+                }
+            } catch {}
+        }
+
+        async function toggleLike(id, b) {
+            try {
+                let r = doc(db, "videos", id, "likes", user.uid);
+                if ((await getDoc(r)).exists()) {
+                    await deleteDoc(r);
+                    b.textContent = "♡ Like";
+                    b.classList.remove("liked");
+                } else {
+                    await setDoc(r, { uid: user.uid, createdAt: serverTimestamp() });
+                    b.textContent = "♥ Liked";
+                    b.classList.add("liked");
+                }
+            } catch (e) {
+                toast(errorText(e));
+            }
+        }
+
+        async function comments(id, cardEl) {
+            let old = cardEl.querySelector(".commentBox");
+            if (old) { old.remove(); return; }
+            let box = document.createElement("div");
+            box.className = "commentBox";
+            let list = document.createElement("div"), input = document.createElement("input"), send = document.createElement("button");
+            input.placeholder = "کمنٹ لکھیں";
+            send.textContent = "Send";
+            send.onclick = async () => {
+                try {
+                    let text = input.value.trim();
+                    if (!text) return;
+                    await addDoc(collection(db, "videos", id, "comments"), {
+                        uid: user.uid,
+                        name: user.displayName || "User",
+                        text,
+                        createdAt: serverTimestamp()
+                    });
+                    input.value = "";
+                    await show();
+                } catch (e) { toast(errorText(e)); }
+            };
+            async function show() {
+                list.innerHTML = "";
+                let s = await getDocs(query(collection(db, "videos", id, "comments"), orderBy("createdAt", "desc"), limit(50)));
+                if (s.empty) list.textContent = "ابھی کوئی کمنٹ نہیں";
+                s.forEach(x => {
+                    let p = document.createElement("p");
+                    p.textContent = (x.data().name || "User") + ": " + x.data().text;
+                    list.append(p);
+                });
+            }
+            box.append(list, input, send);
+            cardEl.append(box);
+            await show();
+        }
+
+        function render() {
+            for (let [id, arr] of [["feed", videos], ["videoFeed", videos.filter(v => v.type === "video")], ["shortFeed", videos.filter(v => v.type === "short")], ["mine", videos.filter(v => v.uid === user.uid)]]) {
+                let root = $(id);
+                root.innerHTML = "";
+                if (!arr.length) { root.textContent = "ابھی کوئی ویڈیو نہیں"; continue; }
+                arr.forEach(v => root.append(card(v)));
+            }
+        }
+
+        $("search").oninput = () => {
+            let q = $("search").value.toLowerCase(), arr = videos.filter(v => (v.title + " " + v.description + " " + v.userName).toLowerCase().includes(q));
+            $("feed").innerHTML = "";
+            arr.forEach(v => $("feed").append(card(v)));
+        };
+
+        async function openProfile(uid) {
+            let s = await getDoc(doc(db, "users", uid)), d = s.exists() ? s.data() : {};
+            $("publicInfo").innerHTML = "";
+            let img = document.createElement("img");
+            img.className = "avatar";
+            img.src = d.photoURL || "https://www.gravatar.com/avatar/?d=mp";
+            let h = document.createElement("h2");
+            h.textContent = d.name || "User";
+            $("publicInfo").append(img, h);
+            $("publicVideos").innerHTML = "";
+            videos.filter(v => v.uid === uid).forEach(v => $("publicVideos").append(card(v)));
+            document.querySelectorAll("main section").forEach(x => x.classList.add("hidden"));
+            $("publicProfile").classList.remove("hidden");
+        }
+
+        $("back").onclick = () => page("home");
+    </script>
+</body>
+  </html>
+          
